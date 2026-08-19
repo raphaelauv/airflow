@@ -267,6 +267,10 @@ spec:
           {{- if .Values.workers.celery.args }}
           args: {{ tpl (toYaml .Values.workers.celery.args) . | nindent 12 }}
           {{- end }}
+          {{- if .Values.workers.celery.resizePolicy }}
+          resizePolicy:
+            {{- toYaml .Values.workers.celery.resizePolicy | nindent 12 }}
+          {{- end }}
           resources: {{- toYaml .Values.workers.celery.resources | nindent 12 }}
           {{- if .Values.workers.celery.livenessProbe.enabled }}
           livenessProbe:

@@ -173,6 +173,10 @@ spec:
           {{- if .Values.apiServer.args }}
           args: {{- tpl (toYaml .Values.apiServer.args) . | nindent 12 }}
           {{- end }}
+          {{- if .Values.apiServer.resizePolicy }}
+          resizePolicy:
+            {{- toYaml .Values.apiServer.resizePolicy | nindent 12 }}
+          {{- end }}
           resources: {{- toYaml .Values.apiServer.resources | nindent 12 }}
           volumeMounts:
             {{- include "airflow_config_mount" . | nindent 12 }}

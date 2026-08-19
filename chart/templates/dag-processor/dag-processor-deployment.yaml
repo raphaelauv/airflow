@@ -157,6 +157,10 @@ spec:
           {{- if .Values.dagProcessor.args }}
           args: {{ tpl (toYaml .Values.dagProcessor.args) . | nindent 12 }}
           {{- end }}
+          {{- if .Values.dagProcessor.resizePolicy }}
+          resizePolicy:
+            {{- toYaml .Values.dagProcessor.resizePolicy | nindent 12 }}
+          {{- end }}
           resources: {{- toYaml .Values.dagProcessor.resources | nindent 12 }}
           volumeMounts:
             {{- if .Values.volumeMounts }}

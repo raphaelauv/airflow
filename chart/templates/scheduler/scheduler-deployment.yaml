@@ -225,6 +225,10 @@ spec:
             - name: worker-logs
               containerPort: {{ .Values.ports.workerLogs }}
           {{- end }}
+          {{- if .Values.scheduler.resizePolicy }}
+          resizePolicy:
+            {{- toYaml .Values.scheduler.resizePolicy | nindent 12 }}
+          {{- end }}
           resources: {{- toYaml .Values.scheduler.resources | nindent 12 }}
           volumeMounts:
             - name: config

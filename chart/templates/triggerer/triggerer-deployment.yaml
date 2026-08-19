@@ -180,6 +180,10 @@ spec:
           {{- if .Values.triggerer.args }}
           args: {{ tpl (toYaml .Values.triggerer.args) . | nindent 12 }}
           {{- end }}
+          {{- if .Values.triggerer.resizePolicy }}
+          resizePolicy:
+            {{- toYaml .Values.triggerer.resizePolicy | nindent 12 }}
+          {{- end }}
           resources: {{- toYaml .Values.triggerer.resources | nindent 12 }}
           volumeMounts:
             {{- if .Values.volumeMounts }}

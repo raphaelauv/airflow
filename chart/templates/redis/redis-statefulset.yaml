@@ -98,6 +98,10 @@ spec:
           lifecycle: {{- tpl (toYaml $containerLifecycleHooks) . | nindent 12 }}
           {{- end }}
           command: ["redis-server"]
+          {{- if .Values.redis.resizePolicy }}
+          resizePolicy:
+            {{- toYaml .Values.redis.resizePolicy | nindent 12 }}
+          {{- end }}
           resources: {{- toYaml .Values.redis.resources | nindent 12 }}
           # Not launching via shell -- parentheses are required
           # https://kubernetes.io/docs/tasks/inject-data-application/define-command-argument-container/#use-environment-variables-to-define-arguments
