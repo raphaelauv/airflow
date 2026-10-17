@@ -144,14 +144,16 @@ with tempfile.TemporaryDirectory(prefix="venv") as tmp_dir:
         @conf_vars(
             {
                 ("openlineage", "transport"): f'{{"type": "file", "log_file_path": "{listener_path}"}}',
-                ("openlineage", "execution_timeout"): "3",
+                ("openlineage", "execution_timeout"): "8",
             }
         )
         def test_short_stalled_task_extraction_with_low_execution_is_killed_by_ol_timeout(
             self, listener_manager
         ):
+            # execution_timeout also bounds on_running, so it needs headroom for the on-start
+            # emission on slow runners while staying well below the on-complete stall.
             self.setup_job(
-                "execute_short_stall",
+                "execute_mid_stall",
                 "test_short_stalled_task_extraction_with_low_execution_is_killed_by_ol_timeout",
                 listener_manager,
             )
