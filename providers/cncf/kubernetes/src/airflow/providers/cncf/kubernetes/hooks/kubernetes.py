@@ -24,7 +24,7 @@ import tempfile
 from collections.abc import AsyncGenerator
 from functools import cached_property
 from time import sleep
-from typing import TYPE_CHECKING, Any, Protocol
+from typing import TYPE_CHECKING, Any, Protocol, cast
 
 import aiofiles
 import requests
@@ -32,6 +32,7 @@ from kubernetes import client, config, utils, watch
 from kubernetes.client.models import V1Deployment
 from kubernetes.config import ConfigException
 from kubernetes_asyncio import client as async_client, config as async_config, watch as async_watch
+from kubernetes_asyncio.stream import WsApiClient
 from urllib3.exceptions import HTTPError
 
 from airflow.models import Connection
@@ -53,7 +54,7 @@ from airflow.utils import yaml
 if TYPE_CHECKING:
     from collections.abc import AsyncGenerator, Generator
 
-    from aiohttp import ClientResponse
+    from aiohttp import ClientResponse, ClientWebSocketResponse
     from kubernetes.client import V1JobList
     from kubernetes.client.models import CoreV1Event, CoreV1EventList, V1Job, V1Pod
 
@@ -1076,6 +1077,42 @@ class AsyncKubernetesHook(KubernetesHook):
         finally:
             if kube_client is not None:
                 await kube_client.close()
+
+    @contextlib.asynccontextmanager
+    async def open_pod_exec(
+        self, name: str, namespace: str, container: str, command: list[str], *, stdin: bool = False
+    ) -> AsyncGenerator[ClientWebSocketResponse, None]:
+        """
+        Run a command in a container of a pod, as ``kubectl exec`` does, and yield its websocket.
+
+        Each message of the websocket starts with its channel (stdin, stdout, stderr or error), as defined
+        in ``kubernetes_asyncio.stream.ws_client``.
+
+        :param name: Name of the pod.
+        :param namespace: Namespace of the pod.
+        :param container: Name of the container to run the command in.
+        :param command: The command to run, with its arguments.
+        :param stdin: Whether to open stdin, to send commands through the websocket.
+        """
+        await self._load_config()
+        async with WsApiClient(configuration=self.client_configuration) as ws_client:
+            # The generated API types the command as a str and the result as the command output:
+            # WsApiClient takes the command as a list and, without _preload_content, returns the websocket
+            websocket = await async_client.CoreV1Api(ws_client).connect_get_namespaced_pod_exec(
+                name,
+                namespace,
+                container=container,
+                command=command,  # type: ignore[arg-type]
+                stdin=stdin,
+                stdout=True,
+                stderr=True,
+                tty=False,
+                _preload_content=False,
+            )
+            async with cast(
+                "contextlib.AbstractAsyncContextManager[ClientWebSocketResponse]", websocket
+            ) as ws:
+                yield ws
 
     @generic_api_retry
     async def get_pod(self, name: str, namespace: str) -> V1Pod:

@@ -16,6 +16,7 @@
 # under the License.
 from __future__ import annotations
 
+import contextlib
 import logging
 from datetime import UTC, datetime, timedelta
 from json.decoder import JSONDecodeError
@@ -26,13 +27,28 @@ from unittest.mock import MagicMock, PropertyMock, patch
 import pendulum
 import pytest
 import time_machine
-from kubernetes.client import CoreV1Event, CoreV1EventList, V1ObjectMeta, V1ObjectReference, V1Pod
+from aiohttp import WSMessage, WSMsgType
+from kubernetes.client import (
+    CoreV1Event,
+    CoreV1EventList,
+    V1ContainerState,
+    V1ContainerStateRunning,
+    V1ContainerStateTerminated,
+    V1ContainerStatus,
+    V1ObjectMeta,
+    V1ObjectReference,
+    V1Pod,
+    V1PodStatus,
+)
 from kubernetes.client.rest import ApiException
 from urllib3.exceptions import HTTPError as BaseHTTPError
 
 from airflow.providers.cncf.kubernetes.exceptions import KubernetesApiError
 from airflow.providers.cncf.kubernetes.hooks.kubernetes import AsyncKubernetesHook
 from airflow.providers.cncf.kubernetes.utils.pod_manager import (
+    _XCOM_JSON_COMMAND,
+    _XCOM_KILL_COMMAND,
+    _XCOM_KILL_FALLBACK_COMMAND,
     AsyncPodManager,
     PodCommandException,
     PodLogsConsumer,
@@ -1917,6 +1933,140 @@ class TestAsyncPodManager:
         mock_to_thread.assert_awaited_once_with(
             self.async_pod_manager._emit_container_logs, log_lines, now, container_name
         )
+
+    def set_exec_websockets(self, *websockets: FakeExecWebSocket) -> None:
+        """Make each ``open_pod_exec`` call of the hook yield the next websocket."""
+        remaining = list(websockets)
+
+        @contextlib.asynccontextmanager
+        async def open_pod_exec(*args, **kwargs):
+            yield remaining.pop(0)
+
+        self.mock_async_hook.open_pod_exec = mock.MagicMock(side_effect=open_pod_exec)
+
+    @pytest.mark.asyncio
+    @pytest.mark.parametrize("xcom", ['{"a": "true"}', "__airflow_xcom_result_empty__"])
+    async def test_extract_xcom_json(self, xcom):
+        # Only the stdout and stderr data are read: not the messages of other channels or without data
+        self.set_exec_websockets(FakeExecWebSocket((1, ""), (1, xcom), (2, "warning"), (3, "{}")))
+        pod = mock.MagicMock(spec=V1Pod)
+
+        assert await self.async_pod_manager.extract_xcom_json(pod) == xcom
+        self.mock_async_hook.open_pod_exec.assert_called_once_with(
+            pod.metadata.name,
+            pod.metadata.namespace,
+            "airflow-xcom-sidecar",
+            ["/bin/sh", "-c", _XCOM_JSON_COMMAND],
+        )
+
+    @pytest.mark.asyncio
+    async def test_extract_xcom_json_invalid(self):
+        self.set_exec_websockets(FakeExecWebSocket((1, '{"a": "tru')))  # codespell:ignore tru
+
+        with pytest.raises(JSONDecodeError):
+            await self.async_pod_manager.extract_xcom_json(mock.MagicMock(spec=V1Pod))
+
+    @pytest.mark.asyncio
+    async def test_extract_xcom_kill(self):
+        websocket = FakeExecWebSocket()
+        self.set_exec_websockets(websocket)
+        pod = mock.MagicMock(spec=V1Pod)
+
+        await self.async_pod_manager.extract_xcom_kill(pod)
+
+        self.mock_async_hook.open_pod_exec.assert_called_once_with(
+            pod.metadata.name, pod.metadata.namespace, "airflow-xcom-sidecar", ["/bin/sh"], stdin=True
+        )
+        assert websocket.sent == [b"\x00" + f"{_XCOM_KILL_COMMAND}\n".encode()]
+
+    @pytest.mark.asyncio
+    async def test_extract_xcom_kill_falls_back_in_a_new_shell(self):
+        # The primary command writes twice to stderr: the second message must not fail the fallback
+        primary = FakeExecWebSocket((2, "sh: pgrep: not found"), (2, "kill: Usage: kill [-s sigspec]"))
+        fallback = FakeExecWebSocket()
+        self.set_exec_websockets(primary, fallback)
+
+        await self.async_pod_manager.extract_xcom_kill(mock.MagicMock(spec=V1Pod))
+
+        assert primary.sent == [b"\x00" + f"{_XCOM_KILL_COMMAND}\n".encode()]
+        assert fallback.sent == [b"\x00" + f"{_XCOM_KILL_FALLBACK_COMMAND}\n".encode()]
+
+    @pytest.mark.asyncio
+    async def test_extract_xcom(self):
+        self.mock_async_hook.get_pod.return_value = _build_pod_with_sidecar(running=True)
+        pod = mock.MagicMock(spec=V1Pod)
+
+        with (
+            mock.patch.object(
+                self.async_pod_manager, "extract_xcom_json", return_value='{"a": 1}'
+            ) as mock_extract_xcom_json,
+            mock.patch.object(self.async_pod_manager, "extract_xcom_kill") as mock_extract_xcom_kill,
+        ):
+            assert await self.async_pod_manager.extract_xcom(pod) == '{"a": 1}'
+        mock_extract_xcom_json.assert_awaited_once_with(pod)
+        mock_extract_xcom_kill.assert_awaited_once_with(pod)
+
+    @pytest.mark.asyncio
+    async def test_extract_xcom_sidecar_not_running(self):
+        self.mock_async_hook.get_pod.return_value = _build_pod_with_sidecar(running=False)
+
+        with pytest.raises(XComRetrievalError, match="container is not running"):
+            await self.async_pod_manager.extract_xcom(mock.MagicMock(spec=V1Pod))
+
+    @pytest.mark.asyncio
+    @pytest.mark.parametrize(
+        ("ignore_kill_failure", "expectation"),
+        [(True, contextlib.nullcontext()), (False, pytest.raises(PodCommandException))],
+    )
+    async def test_extract_xcom_kill_failure(self, ignore_kill_failure, expectation):
+        self.mock_async_hook.get_pod.return_value = _build_pod_with_sidecar(running=True)
+
+        with (
+            mock.patch.object(self.async_pod_manager, "extract_xcom_json", return_value='{"a": 1}'),
+            mock.patch.object(
+                self.async_pod_manager, "extract_xcom_kill", side_effect=PodCommandException("denied")
+            ),
+            expectation,
+        ):
+            assert (
+                await self.async_pod_manager.extract_xcom(
+                    mock.MagicMock(spec=V1Pod), ignore_kill_failure=ignore_kill_failure
+                )
+                == '{"a": 1}'
+            )
+
+
+class FakeExecWebSocket:
+    """Websocket of a pod exec: yields the (channel, data) messages, then closes."""
+
+    def __init__(self, *messages: tuple[int, str]):
+        self.messages = [
+            WSMessage(WSMsgType.BINARY, bytes([channel]) + data.encode(), None) for channel, data in messages
+        ]
+        self.sent: list[bytes] = []
+
+    async def send_bytes(self, data: bytes) -> None:
+        self.sent.append(data)
+
+    def __aiter__(self):
+        return self
+
+    async def __anext__(self) -> WSMessage:
+        if not self.messages:
+            raise StopAsyncIteration
+        return self.messages.pop(0)
+
+
+def _build_pod_with_sidecar(running: bool) -> V1Pod:
+    state = (
+        V1ContainerState(running=V1ContainerStateRunning())
+        if running
+        else V1ContainerState(terminated=V1ContainerStateTerminated(exit_code=0))
+    )
+    sidecar = V1ContainerStatus(
+        name="airflow-xcom-sidecar", image="", image_id="", ready=running, restart_count=0, state=state
+    )
+    return V1Pod(status=V1PodStatus(container_statuses=[sidecar]))
 
 
 class TestPodLogsConsumer:
