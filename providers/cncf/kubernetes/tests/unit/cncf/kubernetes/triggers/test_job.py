@@ -22,7 +22,9 @@ from unittest import mock
 import pytest
 from kubernetes.client import models as k8s
 
+from airflow.providers.cncf.kubernetes.hooks.kubernetes import AsyncKubernetesHook
 from airflow.providers.cncf.kubernetes.triggers.job import KubernetesJobTrigger
+from airflow.providers.cncf.kubernetes.utils.pod_manager import AsyncPodManager
 from airflow.triggers.base import TriggerEvent
 
 TRIGGER_PATH = "airflow.providers.cncf.kubernetes.triggers.job.{}"
@@ -210,3 +212,25 @@ class TestKubernetesJobTrigger:
             cluster_context=CLUSTER_CONTEXT,
         )
         assert hook_actual == hook_expected
+
+    @pytest.mark.asyncio
+    @mock.patch(f"{TRIGGER_CLASS}.pod_manager", spec=AsyncPodManager)
+    @mock.patch(f"{TRIGGER_CLASS}.hook", spec=AsyncKubernetesHook)
+    async def test_run_with_xcom_push_returns_extracted_xcom(self, mock_hook, mock_pod_manager, trigger):
+        trigger.do_xcom_push = True
+        mock_pod = mock.MagicMock(spec=k8s.V1Pod)
+        mock_hook.get_pod = mock.AsyncMock(return_value=mock_pod)
+        mock_hook.wait_until_container_complete = mock.AsyncMock()
+        mock_hook.wait_until_container_started = mock.AsyncMock()
+        mock_hook.wait_until_job_complete = mock.AsyncMock()
+        mock_hook.is_job_failed.return_value = False
+        mock_pod_manager.extract_xcom = mock.AsyncMock(return_value='{"a": 1}')
+
+        event = await trigger.run().asend(None)
+
+        mock_pod_manager.extract_xcom.assert_awaited_once_with(mock_pod)
+        assert event.payload["xcom_result"] == ['{"a": 1}']
+
+    def test_pod_manager_uses_async_hook(self, trigger):
+        assert isinstance(trigger.pod_manager, AsyncPodManager)
+        assert trigger.pod_manager._hook is trigger.hook
