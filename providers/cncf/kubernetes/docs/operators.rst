@@ -881,7 +881,7 @@ Whatever ``do_xcom_push`` is, the operator also pushes:
   ``wait_until_job_complete=True``).
 
 ``KubernetesJobOperator`` reads the XComs of the pods it found when the Job started; for
-``KubernetesStartKueueJobOperator``, see :ref:`howto/operator:KubernetesStartKueueJobOperator`.
+``KueueJobOperator``, see :ref:`howto/operator:KueueJobOperator`.
 
 
 
@@ -937,13 +937,13 @@ For further information, look at:
 * `Kueue Installation details <https://kueue.sigs.k8s.io/docs/installation/>`__
 
 
-.. _howto/operator:KubernetesStartKueueJobOperator:
+.. _howto/operator:KueueJobOperator:
 
 
-KubernetesStartKueueJobOperator
-===============================
+KueueJobOperator
+================
 
-The :class:`~airflow.providers.cncf.kubernetes.operators.kueue.KubernetesStartKueueJobOperator` allows
+The :class:`~airflow.providers.cncf.kubernetes.operators.kueue.KueueJobOperator` allows
 you to start a Kueue job in a Kubernetes cluster
 
 .. exampleinclude:: /../tests/system/cncf/kubernetes/example_kubernetes_kueue.py

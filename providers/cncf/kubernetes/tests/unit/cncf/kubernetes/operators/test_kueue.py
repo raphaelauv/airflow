@@ -31,7 +31,7 @@ from airflow.providers.cncf.kubernetes.hooks.kubernetes import KubernetesHook
 from airflow.providers.cncf.kubernetes.operators.job import KubernetesJobOperator
 from airflow.providers.cncf.kubernetes.operators.kueue import (
     KubernetesInstallKueueOperator,
-    KubernetesStartKueueJobOperator,
+    KueueJobOperator,
 )
 from airflow.providers.cncf.kubernetes.triggers.kueue import KubernetesKueueJobTrigger, build_job_event
 from airflow.providers.cncf.kubernetes.utils.pod_manager import PodManager, XComRetrievalError
@@ -168,15 +168,13 @@ class TestKubernetesInstallKueueOperator:
         mock_hook.return_value.check_kueue_deployment_running.assert_not_called()
 
 
-class TestKubernetesStartKueueJobOperator:
+class TestKueueJobOperator:
     def test_template_fields(self):
         expected_template_fields = {"queue_name"} | set(KubernetesJobOperator.template_fields)
-        assert set(KubernetesStartKueueJobOperator.template_fields) == expected_template_fields
+        assert set(KueueJobOperator.template_fields) == expected_template_fields
 
     def test_init(self):
-        operator = KubernetesStartKueueJobOperator(
-            task_id=TEST_TASK_ID, queue_name=TEST_QUEUE_NAME, suspend=True
-        )
+        operator = KueueJobOperator(task_id=TEST_TASK_ID, queue_name=TEST_QUEUE_NAME, suspend=True)
 
         assert operator.queue_name == TEST_QUEUE_NAME
         assert operator.suspend is True
@@ -189,15 +187,15 @@ class TestKubernetesStartKueueJobOperator:
             " in a Kubernetes cluster, set the `suspend` parameter to True."
         )
         with pytest.raises(AirflowException, match=expected_error_message):
-            KubernetesStartKueueJobOperator(task_id=TEST_TASK_ID, queue_name=TEST_QUEUE_NAME, suspend=False)
+            KueueJobOperator(task_id=TEST_TASK_ID, queue_name=TEST_QUEUE_NAME, suspend=False)
 
-    @mock.patch(KUEUE_OPERATORS_PATH.format("KubernetesStartKueueJobOperator.log"))
+    @mock.patch(KUEUE_OPERATORS_PATH.format("KueueJobOperator.log"))
     def test_init_suspend_is_none(self, mock_log):
         expected_info_message = (
             "You have not set parameter `suspend` in class %s. "
             "For running a Job in Kueue the `suspend` parameter has been set to True."
         )
-        operator = KubernetesStartKueueJobOperator(
+        operator = KueueJobOperator(
             task_id=TEST_TASK_ID,
             queue_name=TEST_QUEUE_NAME,
         )
@@ -206,13 +204,13 @@ class TestKubernetesStartKueueJobOperator:
         assert operator.suspend is True
         assert operator.labels == {"kueue.x-k8s.io/queue-name": TEST_QUEUE_NAME}
         assert operator.annotations == {"kueue.x-k8s.io/queue-name": TEST_QUEUE_NAME}
-        mock_log.info.assert_called_once_with(expected_info_message, "KubernetesStartKueueJobOperator")
+        mock_log.info.assert_called_once_with(expected_info_message, "KueueJobOperator")
 
 
-class TestKubernetesStartKueueJobOperatorWait:
+class TestKueueJobOperatorWait:
     @pytest.fixture(autouse=True)
     def setup_mocks(self):
-        operator_class = KubernetesStartKueueJobOperator
+        operator_class = KueueJobOperator
         with (
             mock.patch.object(
                 operator_class, "hook", mock.create_autospec(KubernetesHook, instance=True)
@@ -246,8 +244,8 @@ class TestKubernetesStartKueueJobOperatorWait:
         self.pods = {pod.metadata.name: pod for pods in pod_lists for pod in pods}
         self.mock_client.list_namespaced_pod.side_effect = [k8s.V1PodList(items=pods) for pods in pod_lists]
 
-    def build_operator(self, **kwargs) -> KubernetesStartKueueJobOperator:
-        return KubernetesStartKueueJobOperator(
+    def build_operator(self, **kwargs) -> KueueJobOperator:
+        return KueueJobOperator(
             task_id=TEST_TASK_ID,
             queue_name=TEST_QUEUE_NAME,
             namespace=NAMESPACE,
@@ -338,7 +336,7 @@ class TestKubernetesStartKueueJobOperatorWait:
     )
     @mock.patch.object(KubernetesJobOperator, "resume_execution", autospec=True)
     @mock.patch.object(
-        KubernetesStartKueueJobOperator,
+        KueueJobOperator,
         "job_client",
         new_callable=lambda: mock.create_autospec(BatchV1Api, instance=True),
     )
@@ -363,7 +361,7 @@ class TestKubernetesStartKueueJobOperatorWait:
 
     @mock.patch.object(KubernetesJobOperator, "resume_execution", autospec=True)
     @mock.patch.object(
-        KubernetesStartKueueJobOperator,
+        KueueJobOperator,
         "job_client",
         new_callable=lambda: mock.create_autospec(BatchV1Api, instance=True),
     )
@@ -382,7 +380,7 @@ class TestKubernetesStartKueueJobOperatorWait:
 
     @mock.patch.object(KubernetesJobOperator, "resume_execution", autospec=True)
     @mock.patch.object(
-        KubernetesStartKueueJobOperator,
+        KueueJobOperator,
         "job_client",
         new_callable=lambda: mock.create_autospec(BatchV1Api, instance=True),
     )

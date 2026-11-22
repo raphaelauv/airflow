@@ -36,7 +36,7 @@ from airflow.providers.cncf.kubernetes.operators.job import (
 )
 from airflow.providers.cncf.kubernetes.operators.kueue import (
     KubernetesInstallKueueOperator,
-    KubernetesStartKueueJobOperator,
+    KueueJobOperator,
 )
 from airflow.providers.cncf.kubernetes.operators.pod import KubernetesPodOperator
 from airflow.providers.cncf.kubernetes.operators.pod_exec import KubernetesPodExecOperator
@@ -62,13 +62,13 @@ from airflow.providers.google.cloud.operators.kubernetes_engine import (
     GKEDeleteCustomResourceOperator,
     GKEDeleteJobOperator,
     GKEDescribeJobOperator,
+    GKEKueueJobOperator,
     GKEListJobsOperator,
     GKEOperatorMixin,
     GKEPodExecOperator,
     GKEResumeJobOperator,
     GKEStartJobOperator,
     GKEStartKueueInsideClusterOperator,
-    GKEStartKueueJobOperator,
     GKEStartPodOperator,
     GKESuspendJobOperator,
 )
@@ -1927,10 +1927,10 @@ class TestGKEDeleteCustomResourceOperator:
             )
 
 
-class TestGKEStartKueueJobOperator:
+class TestGKEKueueJobOperator:
     def test_template_fields(self):
-        assert set(GKEStartKueueJobOperator.template_fields) == set(GKEOperatorMixin.template_fields) | set(
-            KubernetesStartKueueJobOperator.template_fields
+        assert set(GKEKueueJobOperator.template_fields) == set(GKEOperatorMixin.template_fields) | set(
+            KueueJobOperator.template_fields
         )
 
 

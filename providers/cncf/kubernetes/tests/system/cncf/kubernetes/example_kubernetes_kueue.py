@@ -29,7 +29,7 @@ from kubernetes.client import models as k8s
 from airflow import DAG
 from airflow.providers.cncf.kubernetes.operators.kueue import (
     KubernetesInstallKueueOperator,
-    KubernetesStartKueueJobOperator,
+    KueueJobOperator,
 )
 from airflow.providers.cncf.kubernetes.operators.resource import KubernetesCreateResourceOperator
 
@@ -111,7 +111,7 @@ with DAG(
     )
 
     # [START howto_operator_k8s_install_kueue]
-    start_kueue_job = KubernetesStartKueueJobOperator(
+    start_kueue_job = KueueJobOperator(
         task_id="kueue_job",
         queue_name=QUEUE_NAME,
         namespace="default",

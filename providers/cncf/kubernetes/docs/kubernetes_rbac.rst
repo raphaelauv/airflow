@@ -113,7 +113,7 @@ When the Pod name and namespace are provided directly, it needs only these permi
 Job launch permissions
 ----------------------
 
-``KubernetesJobOperator`` and ``KubernetesStartKueueJobOperator`` create and
+``KubernetesJobOperator`` and ``KueueJobOperator`` create and
 monitor Kubernetes Jobs. Job-based operators commonly need these additional
 permissions:
 
@@ -140,7 +140,7 @@ For deferrable job operators, the worker creates the Job before deferring and
 the triggerer polls the Job. If the triggerer uses in-cluster credentials,
 grant the triggerer's ``ServiceAccount`` permission to get jobs. When
 XCom is enabled, the triggerer also needs permission to get pods and exec into
-the XCom sidecar container, and, for ``KubernetesStartKueueJobOperator``, to
+the XCom sidecar container, and, for ``KueueJobOperator``, to
 list pods. The worker reads pod logs after the task resumes.
 
 ``KubernetesPatchJobOperator`` only needs permission to patch jobs.

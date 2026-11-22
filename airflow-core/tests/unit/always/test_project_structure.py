@@ -383,6 +383,7 @@ class TestGoogleProviderProjectStructure(ExampleCoverageTest, AssetsCoverageTest
         "airflow.providers.google.cloud.operators.stackdriver.StackdriverDisableNotificationChannelsOperator",
         "airflow.providers.google.cloud.operators.stackdriver.StackdriverUpsertNotificationChannelOperator",
         "airflow.providers.google.cloud.operators.stackdriver.StackdriverDeleteNotificationChannelOperator",
+        "airflow.providers.google.cloud.operators.kubernetes_engine.GKEStartKueueJobOperator",
     }
 
     BASE_CLASSES = {
@@ -545,6 +546,9 @@ class TestCncfProviderProjectStructure(ExampleCoverageTest):
     PROVIDER = "cncf/kubernetes"
     CLASS_DIRS = ProjectStructureTest.CLASS_DIRS
     BASE_CLASSES = {"airflow.providers.cncf.kubernetes.operators.resource.KubernetesResourceBaseOperator"}
+    DEPRECATED_CLASSES = {
+        "airflow.providers.cncf.kubernetes.operators.kueue.KubernetesStartKueueJobOperator",
+    }
 
 
 class TestSlackProviderProjectStructure(ExampleCoverageTest):

@@ -31,8 +31,8 @@ from airflow.providers.google.cloud.operators.kubernetes_engine import (
     GKECreateClusterOperator,
     GKECreateCustomResourceOperator,
     GKEDeleteClusterOperator,
+    GKEKueueJobOperator,
     GKEStartKueueInsideClusterOperator,
-    GKEStartKueueJobOperator,
 )
 
 try:
@@ -141,7 +141,7 @@ with DAG(
     )
 
     # [START howto_operator_kueue_start_job]
-    kueue_job_task = GKEStartKueueJobOperator(
+    kueue_job_task = GKEKueueJobOperator(
         task_id="kueue_job_task",
         project_id=GCP_PROJECT_ID,
         location=GCP_LOCATION,

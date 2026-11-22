@@ -259,7 +259,7 @@ parameter is set ``True``.
     :start-after: [START howto_operator_gke_start_job_def]
     :end-before: [END howto_operator_gke_start_job_def]
 
-For run Job on a GKE cluster with Kueue enabled use ``GKEStartKueueJobOperator``.
+For run Job on a GKE cluster with Kueue enabled use ``GKEKueueJobOperator``.
 
 .. exampleinclude:: /../../google/tests/system/google/cloud/kubernetes_engine/example_kubernetes_engine_kueue.py
     :language: python

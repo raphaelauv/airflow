@@ -32,10 +32,7 @@ from packaging.version import parse as parse_version
 
 from airflow.exceptions import AirflowProviderDeprecationWarning
 from airflow.providers.cncf.kubernetes.operators.job import KubernetesJobOperator
-from airflow.providers.cncf.kubernetes.operators.kueue import (
-    KubernetesInstallKueueOperator,
-    KubernetesStartKueueJobOperator,
-)
+from airflow.providers.cncf.kubernetes.operators.kueue import KubernetesInstallKueueOperator
 from airflow.providers.cncf.kubernetes.operators.pod import KubernetesPodOperator
 from airflow.providers.cncf.kubernetes.operators.resource import (
     KubernetesCreateResourceOperator,
@@ -65,8 +62,16 @@ from airflow.providers.google.cloud.triggers.kubernetes_engine import (
     GKEOperationTrigger,
     GKEStartPodTrigger,
 )
+from airflow.providers.google.common.deprecated import deprecated
 from airflow.providers.google.common.hooks.base_google import PROVIDE_PROJECT_ID
 from airflow.providers_manager import ProvidersManager
+
+try:
+    from airflow.providers.cncf.kubernetes.operators.kueue import KueueJobOperator
+except ImportError:  # cncf-kubernetes provider released before the rename
+    from airflow.providers.cncf.kubernetes.operators.kueue import (  # type: ignore[assignment]
+        KubernetesStartKueueJobOperator as KueueJobOperator,
+    )
 
 try:
     from airflow.providers.cncf.kubernetes.operators.pod_exec import KubernetesPodExecOperator
@@ -1425,7 +1430,7 @@ class GKEDeleteCustomResourceOperator(GKEOperatorMixin, KubernetesDeleteResource
             )
 
 
-class GKEStartKueueJobOperator(GKEOperatorMixin, KubernetesStartKueueJobOperator):
+class GKEKueueJobOperator(GKEOperatorMixin, KueueJobOperator):
     """
     Executes a Kubernetes Job in Kueue in the specified Google Kubernetes Engine cluster.
 
@@ -1448,9 +1453,7 @@ class GKEStartKueueJobOperator(GKEOperatorMixin, KubernetesStartKueueJobOperator
         account from the list granting this role to the originating account (templated).
     """
 
-    template_fields = tuple(
-        set(GKEOperatorMixin.template_fields) | set(KubernetesStartKueueJobOperator.template_fields)
-    )
+    template_fields = tuple(set(GKEOperatorMixin.template_fields) | set(KueueJobOperator.template_fields))
 
     def __init__(
         self,
@@ -1472,6 +1475,15 @@ class GKEStartKueueJobOperator(GKEOperatorMixin, KubernetesStartKueueJobOperator
         self.use_internal_ip = use_internal_ip
         self.use_dns_endpoint = use_dns_endpoint
         self.impersonation_chain = impersonation_chain
+
+
+@deprecated(
+    planned_removal_date="May 31, 2027",
+    use_instead="airflow.providers.google.cloud.operators.kubernetes_engine.GKEKueueJobOperator",
+    category=AirflowProviderDeprecationWarning,
+)
+class GKEStartKueueJobOperator(GKEKueueJobOperator):
+    """Deprecated. Use :class:`GKEKueueJobOperator`."""
 
 
 class GKEDeleteJobOperator(GKEOperatorMixin, KubernetesDeleteJobOperator):

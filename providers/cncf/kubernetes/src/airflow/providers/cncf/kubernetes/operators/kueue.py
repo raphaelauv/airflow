@@ -20,6 +20,7 @@ from __future__ import annotations
 
 import json
 import time
+import warnings
 from collections.abc import Sequence
 from functools import cached_property
 from typing import TYPE_CHECKING, Any
@@ -29,6 +30,7 @@ from kubernetes.client.rest import ApiException
 from kubernetes.utils import FailToCreateError
 from urllib3.exceptions import HTTPError
 
+from airflow.exceptions import AirflowProviderDeprecationWarning
 from airflow.providers.cncf.kubernetes.hooks.kubernetes import KubernetesHook
 from airflow.providers.cncf.kubernetes.operators.job import KubernetesJobOperator
 from airflow.providers.cncf.kubernetes.triggers.kueue import (
@@ -127,7 +129,7 @@ class KubernetesInstallKueueOperator(BaseOperator):
         self.log.info("Kueue installed successfully!")
 
 
-class KubernetesStartKueueJobOperator(KubernetesJobOperator):
+class KueueJobOperator(KubernetesJobOperator):
     """
     Executes a Kubernetes Job in Kueue.
 
@@ -136,7 +138,7 @@ class KubernetesStartKueueJobOperator(KubernetesJobOperator):
 
     .. seealso::
         For more information on how to use this operator, take a look at the guide:
-        :ref:`howto/operator:KubernetesStartKueueJobOperator`
+        :ref:`howto/operator:KueueJobOperator`
 
     :param queue_name: The name of the Queue in the cluster
     """
@@ -289,3 +291,15 @@ class KubernetesStartKueueJobOperator(KubernetesJobOperator):
             self.pod_manager.fetch_requested_container_logs(pod=pod, containers=self.container_logs)
         except (HTTPError, ApiException) as e:
             self.log.warning("Could not read the logs of pod %s: %s", pod.metadata.name, e)
+
+
+class KubernetesStartKueueJobOperator(KueueJobOperator):
+    """Deprecated. Use :class:`KueueJobOperator`."""
+
+    def __init__(self, *args, **kwargs) -> None:
+        warnings.warn(
+            "`KubernetesStartKueueJobOperator` is deprecated, use `KueueJobOperator` instead.",
+            AirflowProviderDeprecationWarning,
+            stacklevel=2,
+        )
+        super().__init__(*args, **kwargs)

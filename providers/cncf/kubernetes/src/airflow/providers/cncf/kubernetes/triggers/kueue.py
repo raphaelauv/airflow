@@ -92,7 +92,7 @@ def build_pod_label_selector(job: k8s.V1Job) -> str:
 
 def build_job_event(job: k8s.V1Job, xcom_results: dict[str, str]) -> dict[str, Any]:
     """
-    Build the event of a finished Job, as passed to ``KubernetesStartKueueJobOperator.execute_complete``.
+    Build the event of a finished Job, as passed to ``KueueJobOperator.execute_complete``.
 
     :param job: the finished Job.
     :param xcom_results: the raw XComs read from the pods, by pod name.
